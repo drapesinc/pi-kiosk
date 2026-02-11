@@ -53,8 +53,8 @@ TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 # Check if we're running from a cloned repo
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "${SCRIPT_DIR}/bin/pi-kiosk" ]]; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
+if [[ -n "$SCRIPT_DIR" && -f "${SCRIPT_DIR}/bin/pi-kiosk" ]]; then
     info "Installing from local repo..."
     cp "${SCRIPT_DIR}/bin/pi-kiosk" "${TMPDIR}/pi-kiosk"
     cp "${SCRIPT_DIR}/lib/kiosk.sh" "${TMPDIR}/kiosk.sh"
