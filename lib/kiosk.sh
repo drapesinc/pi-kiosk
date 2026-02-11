@@ -14,8 +14,10 @@ export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
 
-# Load URL from config
-load_url() {
+# Load config
+load_config() {
+    KIOSK_URL=""
+    REFRESH_INTERVAL="0"
     if [[ -f "$CONFIG_FILE" ]]; then
         # shellcheck source=/dev/null
         source "$CONFIG_FILE"
@@ -23,6 +25,20 @@ load_url() {
     if [[ -z "${KIOSK_URL:-}" ]]; then
         log "ERROR: No URL configured. Run: pi-kiosk set-url <URL>"
         exit 1
+    fi
+}
+
+KIOSK_HTML="${HOME}/.local/share/pi-kiosk/kiosk.html"
+
+# Build the URL Chromium will actually open
+build_launch_url() {
+    local interval="${REFRESH_INTERVAL:-0}"
+    if [[ "$interval" -gt 0 && -f "$KIOSK_HTML" ]]; then
+        local encoded_url
+        encoded_url=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${KIOSK_URL}', safe=''))" 2>/dev/null) || encoded_url="$KIOSK_URL"
+        echo "file://${KIOSK_HTML}?url=${encoded_url}&refresh=${interval}"
+    else
+        echo "${KIOSK_URL}"
     fi
 }
 
@@ -78,8 +94,9 @@ watchdog() {
 # --- Main ---
 
 log "pi-kiosk starting"
-load_url
+load_config
 log "URL: ${KIOSK_URL}"
+log "Refresh interval: ${REFRESH_INTERVAL:-0}s"
 
 CHROME_BIN=$(detect_chromium)
 log "Using: ${CHROME_BIN}"
@@ -97,10 +114,17 @@ log "Watchdog started (PID ${WATCHDOG_PID})"
 
 # Main restart loop
 while true; do
-    load_url
+    load_config
     clear_crash_flags
 
-    log "Launching Chromium: ${KIOSK_URL}"
+    LAUNCH_URL=$(build_launch_url)
+    log "Launching Chromium: ${LAUNCH_URL}"
+
+    # Extra flags when using the HTML wrapper (iframes need relaxed security)
+    EXTRA_FLAGS=()
+    if [[ "${REFRESH_INTERVAL:-0}" -gt 0 && -f "$KIOSK_HTML" ]]; then
+        EXTRA_FLAGS+=(--disable-web-security --allow-file-access-from-files)
+    fi
 
     # Chromium kiosk flags for Wayland
     "$CHROME_BIN" \
@@ -119,7 +143,8 @@ while true; do
         --enable-gpu-rasterization \
         --use-angle=gles \
         --disable-dev-shm-usage \
-        "${KIOSK_URL}" \
+        "${EXTRA_FLAGS[@]}" \
+        "${LAUNCH_URL}" \
         >> "$LOG_FILE" 2>&1
 
     log "Chromium exited (code $?), restarting in 5s..."
