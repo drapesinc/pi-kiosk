@@ -29,6 +29,24 @@ load_config() {
 }
 
 KIOSK_HTML="${HOME}/.local/share/pi-kiosk/kiosk.html"
+WRAPPER_PORT=9471
+
+# Start local HTTP server to serve the wrapper page (avoids file:// cross-origin blocks)
+start_wrapper_server() {
+    if [[ "${REFRESH_INTERVAL:-0}" -gt 0 && -f "$KIOSK_HTML" ]]; then
+        # Kill any existing wrapper server
+        pkill -f "http.server ${WRAPPER_PORT}" 2>/dev/null || true
+        sleep 0.5
+
+        local serve_dir
+        serve_dir="$(dirname "$KIOSK_HTML")"
+        python3 -m http.server "$WRAPPER_PORT" --directory "$serve_dir" --bind 127.0.0.1 \
+            >> "$LOG_FILE" 2>&1 &
+        WRAPPER_PID=$!
+        log "Wrapper server started on port ${WRAPPER_PORT} (PID ${WRAPPER_PID})"
+        sleep 1
+    fi
+}
 
 # Build the URL Chromium will actually open
 build_launch_url() {
@@ -36,7 +54,7 @@ build_launch_url() {
     if [[ "$interval" -gt 0 && -f "$KIOSK_HTML" ]]; then
         local encoded_url
         encoded_url=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${KIOSK_URL}', safe=''))" 2>/dev/null) || encoded_url="$KIOSK_URL"
-        echo "file://${KIOSK_HTML}?url=${encoded_url}&refresh=${interval}"
+        echo "http://127.0.0.1:${WRAPPER_PORT}/kiosk.html?url=${encoded_url}&refresh=${interval}"
     else
         echo "${KIOSK_URL}"
     fi
@@ -107,6 +125,9 @@ if command -v unclutter &>/dev/null; then
     UNCLUTTER_PID=$!
 fi
 
+# Start local wrapper server if refresh is enabled
+start_wrapper_server
+
 # Start watchdog in background
 watchdog "$CHROME_BIN" &
 WATCHDOG_PID=$!
@@ -117,14 +138,13 @@ while true; do
     load_config
     clear_crash_flags
 
+    # Ensure wrapper server is running if needed
+    if [[ "${REFRESH_INTERVAL:-0}" -gt 0 ]] && ! kill -0 "${WRAPPER_PID:-0}" 2>/dev/null; then
+        start_wrapper_server
+    fi
+
     LAUNCH_URL=$(build_launch_url)
     log "Launching Chromium: ${LAUNCH_URL}"
-
-    # Extra flags when using the HTML wrapper (iframes need relaxed security)
-    EXTRA_FLAGS=()
-    if [[ "${REFRESH_INTERVAL:-0}" -gt 0 && -f "$KIOSK_HTML" ]]; then
-        EXTRA_FLAGS+=(--disable-web-security --allow-file-access-from-files)
-    fi
 
     # Chromium kiosk flags for Wayland
     "$CHROME_BIN" \
@@ -143,7 +163,6 @@ while true; do
         --enable-gpu-rasterization \
         --use-angle=gles \
         --disable-dev-shm-usage \
-        "${EXTRA_FLAGS[@]}" \
         "${LAUNCH_URL}" \
         >> "$LOG_FILE" 2>&1
 
@@ -154,3 +173,4 @@ done
 # Cleanup (unreachable in normal operation, but good practice)
 kill "$WATCHDOG_PID" 2>/dev/null || true
 kill "${UNCLUTTER_PID:-}" 2>/dev/null || true
+kill "${WRAPPER_PID:-}" 2>/dev/null || true
