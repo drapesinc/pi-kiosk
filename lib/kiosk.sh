@@ -8,6 +8,10 @@ set -uo pipefail
 CONFIG_FILE="${HOME}/.config/pi-kiosk/config"
 LOG_FILE="/tmp/kiosk.log"
 
+# Wayland environment (needed when launched via SSH or early autostart)
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
 
 # Load URL from config
@@ -81,8 +85,10 @@ CHROME_BIN=$(detect_chromium)
 log "Using: ${CHROME_BIN}"
 
 # Hide cursor
-unclutter --start-hidden &>/dev/null &
-UNCLUTTER_PID=$!
+if command -v unclutter &>/dev/null; then
+    unclutter -idle 3 &
+    UNCLUTTER_PID=$!
+fi
 
 # Start watchdog in background
 watchdog "$CHROME_BIN" &
@@ -102,21 +108,24 @@ while true; do
         --noerrdialogs \
         --disable-infobars \
         --no-first-run \
-        --enable-features=OverlayScrollbar \
-        --start-maximized \
-        --autoplay-policy=no-user-gesture-required \
         --disable-session-crashed-bubble \
         --disable-component-update \
-        --disable-features=Translate \
         --check-for-update-interval=31536000 \
+        --disable-pinch \
+        --overscroll-history-navigation=0 \
+        --autoplay-policy=no-user-gesture-required \
+        --password-store=basic \
         --ozone-platform=wayland \
+        --enable-gpu-rasterization \
+        --use-angle=gles \
+        --disable-dev-shm-usage \
         "${KIOSK_URL}" \
         >> "$LOG_FILE" 2>&1
 
-    log "Chromium exited (code $?), restarting in 3s..."
-    sleep 3
+    log "Chromium exited (code $?), restarting in 5s..."
+    sleep 5
 done
 
 # Cleanup (unreachable in normal operation, but good practice)
 kill "$WATCHDOG_PID" 2>/dev/null || true
-kill "$UNCLUTTER_PID" 2>/dev/null || true
+kill "${UNCLUTTER_PID:-}" 2>/dev/null || true
