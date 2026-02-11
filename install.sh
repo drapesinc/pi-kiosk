@@ -58,12 +58,10 @@ if [[ -n "$SCRIPT_DIR" && -f "${SCRIPT_DIR}/bin/pi-kiosk" ]]; then
     info "Installing from local repo..."
     cp "${SCRIPT_DIR}/bin/pi-kiosk" "${TMPDIR}/pi-kiosk"
     cp "${SCRIPT_DIR}/lib/kiosk.sh" "${TMPDIR}/kiosk.sh"
-    cp "${SCRIPT_DIR}/lib/kiosk.html" "${TMPDIR}/kiosk.html"
 else
     info "Downloading from GitHub..."
     curl -sSL "${REPO_URL}/bin/pi-kiosk" -o "${TMPDIR}/pi-kiosk"
     curl -sSL "${REPO_URL}/lib/kiosk.sh" -o "${TMPDIR}/kiosk.sh"
-    curl -sSL "${REPO_URL}/lib/kiosk.html" -o "${TMPDIR}/kiosk.html"
 fi
 
 # Install CLI
@@ -71,11 +69,10 @@ chmod +x "${TMPDIR}/pi-kiosk"
 sudo cp "${TMPDIR}/pi-kiosk" "${INSTALL_DIR}/pi-kiosk"
 info "Installed pi-kiosk to ${INSTALL_DIR}/pi-kiosk"
 
-# Install kiosk launcher + HTML wrapper
-mkdir -p "${HOME}/.local/bin" "${HOME}/.local/share/pi-kiosk"
+# Install kiosk launcher
+mkdir -p "${HOME}/.local/bin"
 cp "${TMPDIR}/kiosk.sh" "${HOME}/.local/bin/kiosk.sh"
 chmod +x "${HOME}/.local/bin/kiosk.sh"
-cp "${TMPDIR}/kiosk.html" "${HOME}/.local/share/pi-kiosk/kiosk.html"
 
 # Run the install command
 pi-kiosk install "$URL"

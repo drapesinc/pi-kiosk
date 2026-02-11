@@ -79,14 +79,13 @@ cmd_install() {
     save_config
     info "URL set to: ${url}"
 
-    # Install kiosk launcher script + HTML wrapper
+    # Install kiosk launcher script
     local lib_dir
     lib_dir="$(cd "$(dirname "$0")/../lib" 2>/dev/null && pwd)" || true
     local repo_url="https://raw.githubusercontent.com/drapesinc/pi-kiosk/main"
 
     mkdir -p "$(dirname "$KIOSK_SCRIPT")" "$DATA_DIR"
 
-    # kiosk.sh
     if [[ -f "${lib_dir}/kiosk.sh" ]]; then
         cp "${lib_dir}/kiosk.sh" "$KIOSK_SCRIPT"
     else
@@ -94,14 +93,6 @@ cmd_install() {
     fi
     chmod +x "$KIOSK_SCRIPT"
     info "Installed kiosk launcher to ${KIOSK_SCRIPT}"
-
-    # kiosk.html (refresh wrapper)
-    if [[ -f "${lib_dir}/kiosk.html" ]]; then
-        cp "${lib_dir}/kiosk.html" "${DATA_DIR}/kiosk.html"
-    else
-        curl -sSL "${repo_url}/lib/kiosk.html" -o "${DATA_DIR}/kiosk.html"
-    fi
-    info "Installed refresh wrapper to ${DATA_DIR}/kiosk.html"
 
     # Configure labwc autostart
     mkdir -p "$(dirname "$AUTOSTART_FILE")"

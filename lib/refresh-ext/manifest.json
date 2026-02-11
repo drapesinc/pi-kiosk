@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Pi Kiosk Refresh",
+  "version": "1.0",
+  "description": "Smooth auto-refresh for pi-kiosk displays",
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["refresh.js"],
+    "run_at": "document_idle"
+  }]
+}
